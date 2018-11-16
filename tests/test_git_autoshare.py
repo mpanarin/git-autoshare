@@ -117,7 +117,7 @@ def test_clone(config):
     assert cache_objects_dir.check(dir=1)
 
 
-def test_submodule(config):
+def test_submodule_add(config):
     config.write_repos_yml({
         'github.com': {
             'mis-builder': [
@@ -146,6 +146,46 @@ def test_submodule(config):
     assert cache_objects_dir.check(dir=1)
     # we return to the old place just in case
     os.chdir(old_cwd)
+
+
+def test_submodule_update_specific(config):
+    config.write_repos_yml({
+        'github.com': {
+            'mis-builder': [
+                'OCA',
+                'acsone',
+            ],
+            'git-aggregator': [
+                'acsone',
+            ],
+        },
+    })
+    local_path = './git-aggregator'
+    get_hash_cmd = 'git log --oneline | head -n 1 | cut -d ' ' -f1'
+    old_cwd = os.getcwd()
+    # we need to cd into a repository for git submodule to work
+    os.chdir(str(config.repo_dir))
+    # add a submodule for an update
+    subprocess.call([
+        'git', 'autoshare-submodule-add',
+        'https://github.com/acsone/git-aggregator.git',
+        local_path])
+    os.chdir(local_path)
+    orig_commit_hash = os.popen(get_hash_cmd)
+    subprocess.call(['git', 'reset', '--hard', '@^'])
+    commit_hash = os.popen(get_hash_cmd)
+    import pdb; pdb.set_trace()
+    assert orig_commit_hash != commit_hash
+    os.chdir('..')
+    subprocess.check_call([
+        'git',
+        'autoshare-submodule-update',
+        '--init',
+        local_path,
+    ])
+    os.chdir(local_path)
+    commit_hash = os.popen(get_hash_cmd)
+    assert orig_commit_hash == commit_hash
 
 
 def test_repo_cached(config):

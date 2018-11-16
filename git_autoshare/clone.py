@@ -4,11 +4,10 @@
 
 from __future__ import print_function
 
-import os
 import subprocess
 import sys
 
-from .core import git_bin, prefetch_one, _repo_cached
+from .core import git_bin, transform_cmd
 
 
 def main():
@@ -23,21 +22,6 @@ def main():
     )
     if not skip:
         quiet = '-q' in cmd or '--quiet' in cmd
-        found = False
-        found, index, kwargs = _repo_cached(cmd)
-        kwargs.update({
-            'quiet': quiet,
-        })
-        if found:
-            if not os.path.exists(kwargs['repo_dir']):
-                prefetch_one(**kwargs)
-            if not quiet:
-                print(
-                    "git-autoshare clone added --reference",
-                    kwargs['repo_dir']
-                )
-            cmd = (cmd[:index] +
-                   ['--reference', kwargs['repo_dir']] +
-                   cmd[index:])
+        cmd = transform_cmd(cmd, quiet)
     r = subprocess.call(cmd)
     sys.exit(r)

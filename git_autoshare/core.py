@@ -10,7 +10,6 @@ import subprocess
 import appdirs
 import yaml
 
-
 APP_NAME = 'git-autoshare'
 
 
@@ -95,6 +94,81 @@ def _repo_cached(cmd):
         }
     else:
         return False, 0, {}
+
+
+def _submodule_url_from_path(cmd):
+    for index, item in enumerate(cmd):
+        for path, url in list_submodules().items():
+            if item in path:
+                cmd[index] = url
+                return cmd
+    return cmd
+
+
+def get_submodules_paths():
+    root_dir = get_root_dir()
+    gitmodules_path = os.path.join(root_dir, '.gitmodules')
+    # subprocess check_output was not working with pipe
+    paths = os.popen(
+        "%s config --file %s --get-regexp path |"
+        " awk '{ print $2 }'" % (git_bin(), gitmodules_path)
+    ).read().strip().split('\n')
+    cwd = os.getcwd()
+    return [os.path.join(root_dir, x)[len(cwd) + 1:] for x in paths]
+
+
+def get_submodules_urls():
+    root_dir = get_root_dir()
+    gitmodules_path = os.path.join(root_dir, '.gitmodules')
+    # subprocess check_output was not working with pipe
+    return os.popen(
+        "%s config --file %s --get-regexp url |"
+        " awk '{ print $2 }'" % (git_bin(), gitmodules_path)
+    ).read().strip().split('\n')
+
+
+def list_submodules():
+    root_dir = get_root_dir()
+    gitmodules_path = os.path.join(root_dir, '.gitmodules')
+    # subprocess check_output was not working with pipe
+    modules = os.popen(
+        "%s config --file %s --get-regexp url |"
+        " awk '{ print $0 }'" % (git_bin(), gitmodules_path)
+    ).read().strip().split('\n')
+    modules = dict(map(
+        lambda z: (z.split()[0].split('.')[1], z.split()[1]),
+        modules
+    ))
+    return modules
+
+
+def get_root_dir():
+    return subprocess.check_output([
+        git_bin(),
+        "rev-parse",
+        "--show-toplevel",
+    ]).decode().strip()
+
+
+def transform_cmd(cmd, quiet, submodule_path=False):
+    found = False
+    new_cmd = cmd[:]
+    if submodule_path:
+        new_cmd = _submodule_url_from_path(new_cmd)
+    found, index, kwargs = _repo_cached(new_cmd)
+    kwargs.update({
+        'quiet': quiet,
+    })
+    if found:
+        if not os.path.exists(kwargs['repo_dir']):
+            prefetch_one(**kwargs)
+        if not quiet:
+            print(
+                "git-autoshare {}-{} added --reference".format(cmd[1], cmd[2]),
+                kwargs['repo_dir'],
+            )
+        cmd = (cmd[:index] + ['--reference', kwargs['repo_dir']] + cmd[index:])
+    return cmd
 
 
 def git_remotes(repo_dir='.'):

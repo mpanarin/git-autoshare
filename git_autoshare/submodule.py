@@ -4,11 +4,10 @@
 
 from __future__ import print_function
 
-import os
 import subprocess
 import sys
 
-from .core import git_bin, prefetch_one, _repo_cached
+from .core import get_submodules_paths, git_bin, transform_cmd
 
 
 def add():
@@ -16,21 +15,30 @@ def add():
     skip = '--reference' in cmd
     if not skip:
         quiet = '-q' in cmd or '--quiet' in cmd
-        found = False
-        found, index, kwargs = _repo_cached(cmd)
-        kwargs.update({
-            'quiet': quiet,
-        })
-        if found:
-            if not os.path.exists(kwargs['repo_dir']):
-                prefetch_one(**kwargs)
-            if not quiet:
-                print(
-                    "git-autoshare submodule-add added --reference",
-                    kwargs['repo_dir']
-                )
-            cmd = (cmd[:index] +
-                   ['--reference', kwargs['repo_dir']] +
-                   cmd[index:])
+        cmd = transform_cmd(cmd, quiet)
+    r = subprocess.call(cmd)
+    sys.exit(r)
+
+
+def update():
+    args = sys.argv[1:]
+    # no repositories passed -> operating on all
+    multi_repo = not [x for x in args if not x.startswith('-')]
+    skip = '--reference' in args
+    cmd = [git_bin(), 'submodule', 'update'] + args
+    if not skip:
+        quiet = '-q' in cmd or '--quiet' in cmd
+        if multi_repo:
+            modules = get_submodules_paths()
+            for module in modules:
+                mod_cmd = cmd.copy()
+                mod_cmd.append(module)
+                mod_cmd = transform_cmd(mod_cmd, quiet, submodule_path=True)
+                r = subprocess.call(mod_cmd)
+                if r:
+                    sys.exit(r)
+            sys.exit(0)
+        else:
+            cmd = transform_cmd(cmd, quiet, submodule_path=True)
     r = subprocess.call(cmd)
     sys.exit(r)
